@@ -1,0 +1,1718 @@
+openapi: 3.0.3
+info:
+  title: Phone Tracker API
+  description: |
+    Phone Tracker API for academic misconduct monitoring and student management.
+    
+    This API provides comprehensive endpoints for:
+    - User authentication and session management
+    - Student and system user management
+    - Occurrence tracking and feedback systems
+    - Analytics and reporting features
+    
+    ## Authentication
+    Most endpoints require JWT authentication. Include the token in the Authorization header:
+    ```
+    Authorization: Bearer <your-jwt-token>
+    ```
+    
+    ## Permissions
+    The API uses role-based access control with the following roles:
+    - **ADMIN**: Full system access
+    - **STAFF**: Management operations
+    - **STUDENT**: Limited access to own data
+    - **TEACHER**: Educational tools access
+    
+    ## Error Handling
+    The API uses standard HTTP status codes and returns detailed error information in JSON format.
+    All error responses follow a consistent structure with timestamp, status, error type, message, and path.
+
+  version: 1.0.0
+  contact:
+    name: Luiz Gustavo
+    email: luiz.gustavo@aluno.ifsp.edu.br
+    url: https://github.com/luizgustavosgobi
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /auth/login endpoint
+
+  schemas:
+    # Authentication DTOs
+    LoginDto:
+      type: object
+      required:
+        - id
+        - password
+      properties:
+        id:
+          type: string
+          description: User or student unique identifier
+          minLength: 3
+          maxLength: 50
+          pattern: '^[a-zA-Z0-9_]+$'
+          example: "admin001"
+        password:
+          type: string
+          format: password
+          description: User password (will be validated against stored hash)
+          minLength: 6
+          maxLength: 100
+          example: "password123"
+      description: Credentials required for user authentication
+
+    JwtTokenDto:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: JWT authentication token (expires in 24 hours)
+          pattern: '^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$'
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIiwiaWF0IjoxNjM5NTU0NjAwLCJleHAiOjE2Mzk2NDEwMDB9.signature"
+      description: JWT token response after successful authentication
+
+    # User Management DTOs
+    UserDto:
+      type: object
+      required:
+        - id
+        - name
+        - role
+      properties:
+        id:
+          type: string
+          description: Unique user identifier (cannot be changed after creation)
+          minLength: 3
+          maxLength: 50
+          pattern: '^[a-zA-Z0-9_]+$'
+          example: "admin001"
+        name:
+          type: string
+          description: Full name of the user
+          minLength: 2
+          maxLength: 100
+          pattern: '^[a-zA-Z\s]+$'
+          example: "John Smith"
+        role:
+          type: string
+          enum: [ADMIN, STAFF, TEACHER]
+          description: |
+            User role in the system:
+            - ADMIN: Full system access, can manage all users and students
+            - STAFF: Can manage students and view occurrences
+            - TEACHER: Can view students and use autocomplete features
+          example: "ADMIN"
+      description: User information for system accounts (admin, staff, teachers)
+
+    UserResponseDto:
+      allOf:
+        - $ref: '#/components/schemas/UserDto'
+        - type: object
+          properties:
+            createdAt:
+              type: string
+              format: date-time
+              description: Account creation timestamp (UTC)
+              example: "2024-01-01T12:00:00.000Z"
+      description: User information returned in API responses (excludes sensitive data)
+
+    ChangePasswordDto:
+      type: object
+      required:
+        - id
+        - newPassword
+      properties:
+        id:
+          type: string
+          description: User or student ID whose password will be changed
+          minLength: 3
+          maxLength: 50
+          example: "admin001"
+        oldPassword:
+          type: string
+          format: password
+          description: Current password (optional, used for self-service password changes)
+          minLength: 6
+          maxLength: 100
+        newPassword:
+          type: string
+          format: password
+          description: New password (must meet security requirements)
+          minLength: 8
+          maxLength: 100
+          pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]'
+          example: "NewSecure123!"
+      description: Password change request data
+
+    # Student Management DTOs
+    StudentDto:
+      type: object
+      required:
+        - id
+        - name
+        - course
+      properties:
+        id:
+          type: string
+          description: Unique student identifier (typically student ID number)
+          minLength: 3
+          maxLength: 20
+          pattern: '^[a-zA-Z0-9]+$'
+          example: "20240001"
+        name:
+          type: string
+          description: Full name of the student
+          minLength: 2
+          maxLength: 100
+          pattern: '^[a-zA-ZÀ-ÿ\s]+$'
+          example: "Alice Johnson"
+        course:
+          type: string
+          description: Student's course or program of study
+          minLength: 2
+          maxLength: 100
+          example: "Computer Science"
+        photo:
+          type: string
+          format: byte
+          description: Base64 encoded profile photo (optional, max 2MB)
+          maxLength: 2800000
+          example: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ..."
+      description: Student account information for academic management
+
+    StudentResponseDto:
+      allOf:
+        - $ref: '#/components/schemas/StudentDto'
+        - type: object
+          properties:
+            createdAt:
+              type: string
+              format: date-time
+              description: Account creation timestamp (UTC)
+              example: "2024-01-01T12:00:00.000Z"
+      description: Student information returned in API responses
+
+    StudentAndFeedbackResponseDto:
+      allOf:
+        - $ref: '#/components/schemas/StudentResponseDto'
+        - type: object
+          properties:
+            occurrences:
+              type: array
+              description: Recent feedback/occurrences for this student (max 10 most recent)
+              maxItems: 10
+              items:
+                $ref: '#/components/schemas/FeedbackSummaryDto'
+            totalOccurrences:
+              type: integer
+              description: Total number of occurrences for this student
+              minimum: 0
+              example: 5
+            approvedOccurrences:
+              type: integer
+              description: Number of approved occurrences
+              minimum: 0
+              example: 3
+            rejectedOccurrences:
+              type: integer
+              description: Number of rejected occurrences
+              minimum: 0
+              example: 2
+            pendingOccurrences:
+              type: integer
+              description: Number of occurrences awaiting review
+              minimum: 0
+              example: 0
+            lastOccurrenceDate:
+              type: string
+              format: date-time
+              description: Date of most recent occurrence (null if no occurrences)
+              nullable: true
+              example: "2024-01-15T14:30:00.000Z"
+      description: Complete student profile with occurrence statistics and recent feedback
+
+    FeedbackSummaryDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique feedback identifier
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        comments:
+          type: string
+          description: Staff comments about the occurrence
+          maxLength: 1000
+          example: "Valid occurrence confirmed"
+        status:
+          type: string
+          enum: [APPROVED, REJECTED, PENDING]
+          description: Review status of the occurrence
+          example: "APPROVED"
+        reviewDate:
+          type: string
+          format: date-time
+          description: When the review was completed (null if pending)
+          nullable: true
+          example: "2024-01-15T15:00:00.000Z"
+      description: Summary of feedback for student profile display
+
+    # Occurrence Management DTOs
+    OccurrenceDto:
+      type: object
+      required:
+        - date
+        - type
+        - cameraId
+      properties:
+        date:
+          type: string
+          format: date-time
+          description: When the occurrence happened (ISO 8601 format)
+          example: "2024-01-15T14:30:00.000Z"
+        type:
+          type: string
+          enum: [PHONE_USAGE, SLEEPING, TALKING, EATING, OTHER]
+          description: |
+            Type of misconduct detected:
+            - PHONE_USAGE: Student using mobile device inappropriately
+            - SLEEPING: Student sleeping during class
+            - TALKING: Disruptive talking during class
+            - EATING: Eating during prohibited times
+            - OTHER: Other policy violations
+          example: "PHONE_USAGE"
+        cameraId:
+          type: integer
+          description: Numeric identifier of the camera that detected the occurrence
+          minimum: 1
+          maximum: 9999
+          example: 1
+        local:
+          type: string
+          description: Location where the occurrence happened (optional)
+          maxLength: 100
+          example: "Classroom A"
+        proof:
+          type: string
+          format: binary
+          description: Proof file (image/video evidence, max 10MB)
+          maxLength: 10485760
+      description: Occurrence data submitted by external detection systems
+
+    OccurrenceResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique occurrence identifier
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        local:
+          type: string
+          description: Location where the occurrence happened
+          example: "Classroom A"
+        date:
+          type: string
+          format: date-time
+          description: When the occurrence happened (UTC)
+          example: "2024-01-15T14:30:00.000Z"
+        type:
+          type: string
+          enum: [PHONE_USAGE, SLEEPING, TALKING, EATING, OTHER]
+          description: Type of misconduct detected
+          example: "PHONE_USAGE"
+        cameraId:
+          type: string
+          description: Camera identifier that detected the occurrence
+          example: "CAM_001"
+        proofFile:
+          type: string
+          description: Filename of the proof file (null if no proof available)
+          nullable: true
+          example: "proof_20240115_143000.jpg"
+        confidence:
+          type: number
+          format: float
+          description: AI confidence level (0.0 to 1.0, null if not AI-detected)
+          minimum: 0.0
+          maximum: 1.0
+          nullable: true
+          example: 0.95
+        feedback:
+          $ref: '#/components/schemas/FeedbackResponseDto'
+      description: Complete occurrence information with optional feedback
+
+    FeedbackDto:
+      type: object
+      required:
+        - status
+      properties:
+        studentId:
+          type: string
+          description: Student ID to associate with approved occurrence (required for APPROVED status)
+          minLength: 3
+          maxLength: 20
+          example: "20240001"
+        comments:
+          type: string
+          description: Staff comments about the occurrence review (optional)
+          maxLength: 1000
+          example: "Valid occurrence confirmed after manual review"
+        status:
+          type: string
+          enum: [APPROVED, REJECTED]
+          description: |
+            Review decision:
+            - APPROVED: Occurrence is valid and will be associated with the student
+            - REJECTED: Occurrence is invalid (false positive, etc.)
+          example: "APPROVED"
+      description: Staff feedback and review decision for an occurrence
+
+    FeedbackResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique feedback identifier
+          example: "456e7890-f12a-34b5-c678-901234567890"
+        comments:
+          type: string
+          description: Staff comments about the occurrence
+          nullable: true
+          example: "Valid occurrence confirmed"
+        status:
+          type: string
+          enum: [APPROVED, REJECTED, PENDING]
+          description: Review status
+          example: "APPROVED"
+        reviewedBy:
+          type: string
+          description: ID of staff member who provided the feedback
+          nullable: true
+          example: "staff001"
+        reviewDate:
+          type: string
+          format: date-time
+          description: When the feedback was submitted (UTC)
+          nullable: true
+          example: "2024-01-15T15:00:00.000Z"
+        student:
+          $ref: '#/components/schemas/StudentSummaryDto'
+      description: Complete feedback information with reviewer details
+
+    StudentSummaryDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Student unique identifier
+          example: "20240001"
+        name:
+          type: string
+          description: Student full name
+          example: "Alice Johnson"
+      description: Basic student information for feedback associations
+
+    OccurrenceFilterDto:
+      type: object
+      properties:
+        startDate:
+          type: string
+          format: date
+          description: Filter occurrences from this date (YYYY-MM-DD)
+          example: "2024-01-01"
+        endDate:
+          type: string
+          format: date
+          description: Filter occurrences until this date (YYYY-MM-DD)
+          example: "2024-12-31"
+        status:
+          type: string
+          enum: [APPROVED, REJECTED, PENDING]
+          description: Filter by review status
+          example: "PENDING"
+        type:
+          type: string
+          enum: [PHONE_USAGE, SLEEPING, TALKING, EATING, OTHER]
+          description: Filter by occurrence type
+          example: "PHONE_USAGE"
+        cameraId:
+          type: integer
+          description: Filter by camera ID
+          minimum: 1
+          example: 1
+        local:
+          type: string
+          description: Filter by location (partial match)
+          maxLength: 100
+          example: "Classroom"
+        studentId:
+          type: string
+          description: Filter by specific student ID
+          example: "20240001"
+      description: Optional filters for occurrence queries
+
+    OccurrenceNotificationDto:
+      type: object
+      required:
+        - occurrenceId
+        - action
+        - timestamp
+      properties:
+        occurrenceId:
+          type: string
+          format: uuid
+          description: ID of the occurrence that triggered the notification
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        action:
+          type: string
+          enum: [CREATED, FEEDBACK, DELETED]
+          description: |
+            Type of action that occurred:
+            - CREATED: New occurrence was created
+            - FEEDBACK: Feedback was provided for an occurrence
+            - DELETED: Occurrence was deleted
+          example: "CREATED"
+        timestamp:
+          type: string
+          format: date-time
+          description: When the action occurred (UTC)
+          example: "2024-01-15T14:30:00.000Z"
+      description: WebSocket notification for real-time updates
+
+    # Charts and Analytics DTOs
+    ChartsDataDto:
+      type: object
+      properties:
+        occurrencesByDay:
+          type: object
+          description: Daily occurrence counts (last 30 days)
+          additionalProperties:
+            type: integer
+            minimum: 0
+          example:
+            "2024-01-15": 12
+            "2024-01-16": 8
+        occurrencesByHour:
+          type: object
+          description: Hourly occurrence distribution (0-23)
+          additionalProperties:
+            type: integer
+            minimum: 0
+          example:
+            "8": 5
+            "14": 10
+            "16": 15
+        occurrencesByCamera:
+          type: object
+          description: Occurrence counts by camera with location info
+          additionalProperties:
+            type: object
+            properties:
+              location:
+                type: string
+                example: "Classroom A"
+              count:
+                type: integer
+                minimum: 0
+                example: 15
+        occurrencesByLocation:
+          type: array
+          description: Heatmap data for occurrence locations with coordinates
+          items:
+            type: object
+            properties:
+              location:
+                type: string
+                example: "Classroom A"
+              coordinates:
+                type: object
+                properties:
+                  x:
+                    type: number
+                    example: 100.5
+                  y:
+                    type: number
+                    example: 200.3
+                required: [x, y]
+              count:
+                type: integer
+                minimum: 0
+                example: 15
+        occurrencesByType:
+          type: object
+          description: Occurrence distribution by type with percentages
+          additionalProperties:
+            type: object
+            properties:
+              count:
+                type: integer
+                minimum: 0
+                example: 18
+              percentage:
+                type: number
+                format: float
+                minimum: 0.0
+                maximum: 100.0
+                example: 72.5
+        occurrencesTypeEvolution:
+          type: object
+          description: Daily breakdown by occurrence type (last 30 days)
+          additionalProperties:
+            type: object
+            properties:
+              PHONE_USAGE:
+                type: integer
+                minimum: 0
+                example: 8
+              SLEEPING:
+                type: integer
+                minimum: 0
+                example: 3
+              TALKING:
+                type: integer
+                minimum: 0
+                example: 1
+              EATING:
+                type: integer
+                minimum: 0
+                example: 0
+              OTHER:
+                type: integer
+                minimum: 0
+                example: 0
+        feedbacksByStudent:
+          type: object
+          description: Feedback statistics grouped by student
+          additionalProperties:
+            type: object
+            properties:
+              studentName:
+                type: string
+                example: "Alice Johnson"
+              approvedCount:
+                type: integer
+                minimum: 0
+                example: 5
+              rejectedCount:
+                type: integer
+                minimum: 0
+                example: 2
+              pendingCount:
+                type: integer
+                minimum: 0
+                example: 1
+              totalCount:
+                type: integer
+                minimum: 0
+                example: 8
+              approvalRate:
+                type: number
+                format: float
+                minimum: 0.0
+                maximum: 100.0
+                nullable: true
+                example: 62.5
+      description: Comprehensive analytics data for dashboard visualizations
+
+    # Common DTOs
+    ErrorResponse:
+      type: object
+      required:
+        - timestamp
+        - status
+        - error
+        - message
+        - path
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: When the error occurred (UTC)
+          example: "2024-01-01T12:00:00.000Z"
+        status:
+          type: integer
+          description: HTTP status code
+          minimum: 400
+          maximum: 599
+          example: 400
+        error:
+          type: string
+          description: HTTP status reason phrase
+          example: "Bad Request"
+        message:
+          type: string
+          description: Detailed error message explaining what went wrong
+          example: "Validation failed for field 'name': must not be blank"
+        path:
+          type: string
+          description: API endpoint that generated the error
+          example: "/users/create"
+        details:
+          type: object
+          description: Additional error details (validation errors, etc.)
+          nullable: true
+          additionalProperties: true
+          example:
+            field: "name"
+            rejectedValue: ""
+            code: "NotBlank"
+      description: Standard error response format used across all endpoints
+
+    ValidationErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            violations:
+              type: array
+              description: List of validation constraint violations
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                    description: Field that failed validation
+                    example: "name"
+                  message:
+                    type: string
+                    description: Validation error message
+                    example: "must not be blank"
+                  rejectedValue:
+                    description: Value that was rejected
+                    nullable: true
+                    example: ""
+      description: Validation error response with detailed field-level errors
+
+    PaginatedResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          description: Array of items for the current page
+          items: {}
+        pageable:
+          type: object
+          properties:
+            pageNumber:
+              type: integer
+              minimum: 0
+              description: Current page number (0-based)
+            pageSize:
+              type: integer
+              minimum: 1
+              description: Number of items per page
+            sort:
+              type: object
+              properties:
+                sorted:
+                  type: boolean
+                  description: Whether results are sorted
+                ascending:
+                  type: boolean
+                  description: Sort direction (true for ascending)
+                property:
+                  type: string
+                  description: Property used for sorting
+        totalElements:
+          type: integer
+          minimum: 0
+          description: Total number of items across all pages
+        totalPages:
+          type: integer
+          minimum: 0
+          description: Total number of pages
+        numberOfElements:
+          type: integer
+          minimum: 0
+          description: Number of items in current page
+        first:
+          type: boolean
+          description: Whether this is the first page
+        last:
+          type: boolean
+          description: Whether this is the last page
+        empty:
+          type: boolean
+          description: Whether the page is empty
+      description: Standard pagination wrapper for list responses
+
+paths:
+  # Authentication endpoints
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Authenticate user and generate JWT token
+      description: |
+        Authenticates a user with their credentials and returns a JWT token for session management.
+        
+        The JWT token should be included in the Authorization header as 'Bearer {token}' for subsequent API calls.
+        
+        **Required Permissions:** None - Public endpoint
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginDto'
+            examples:
+              loginExample:
+                summary: Login example
+                value:
+                  id: "user123"
+                  password: "userPassword123"
+      responses:
+        '200':
+          description: Authentication successful - JWT token generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JwtTokenDto'
+              examples:
+                successResponse:
+                  summary: Success response
+                  value:
+                    token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIiwiaWF0IjoxNjM5NTU0NjAwLCJleHAiOjE2Mzk2NDEwMDB9.signature"
+        '400':
+          description: Bad request - Invalid request body format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication failed - Invalid credentials provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidCredentials:
+                  summary: Invalid credentials error
+                  value:
+                    timestamp: "2024-01-01T12:00:00.000Z"
+                    status: 401
+                    error: "Unauthorized"
+                    message: "Invalid Credentials"
+                    path: "/auth/login"
+
+  /auth/logout:
+    get:
+      tags:
+        - Authentication
+      summary: Invalidate JWT token and logout user
+      description: |
+        Invalidates the provided JWT token on the server-side, effectively logging out the user.
+        
+        After logout, the token will no longer be valid for authentication.
+        
+        **Required Permissions:** None - Public endpoint
+      operationId: logout
+      security: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          description: JWT token to be invalidated
+          schema:
+            type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      responses:
+        '200':
+          description: Logout successful - Token invalidated
+        '400':
+          description: Invalid or malformed token provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # User Management endpoints
+  /users:
+    post:
+      tags:
+        - Users
+      summary: Create a new system user
+      description: |
+        Creates a new user in the system (e.g., admin, staff members).
+        
+        A default password is automatically generated based on the user's first name and ID 
+        in the format: {firstName}_{userId}
+        
+        **Required Permissions:** `ROLE_ADMIN`
+        
+        **Business Rules:**
+        - User ID must be unique
+        - Password is auto-generated and should be changed on first login
+        - User will have the role specified in the request
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserDto'
+            examples:
+              createUserExample:
+                summary: Create user example
+                value:
+                  id: "admin001"
+                  name: "John Smith"
+                  role: "ADMIN"
+      responses:
+        '200':
+          description: User created successfully
+        '400':
+          description: Invalid request body or validation errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required - Missing or invalid JWT token
+        '403':
+          description: Access denied - User does not have ADMIN role
+        '409':
+          description: Conflict - User with the provided ID already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags:
+        - Users
+      summary: Retrieve all system users
+      description: |
+        Retrieves a paginated list of all users in the system.
+        
+        **Required Permissions:** `ROLE_ADMIN` or `ROLE_STAFF`
+        
+        **Features:**
+        - Paginated results for performance
+        - Sortable by user attributes (default: name)
+        - Configurable page size (default: 20)
+      operationId: getAllUsers
+      parameters:
+        - name: page
+          in: query
+          description: Page number (0-based)
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - name: size
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: sort
+          in: query
+          description: Sort criteria in format property(,asc|desc)
+          schema:
+            type: string
+            default: "name"
+      responses:
+        '200':
+          description: Users retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserResponseDto'
+                  totalElements:
+                    type: integer
+                  totalPages:
+                    type: integer
+                  first:
+                    type: boolean
+                  last:
+                    type: boolean
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied - User does not have ADMIN or STAFF role
+
+  /users/{id}:
+    get:
+      tags:
+        - Users
+      summary: Retrieve user information by ID
+      description: |
+        Retrieves detailed information for a specific user by their ID.
+        
+        **Required Permissions:** 
+        - `ROLE_ADMIN` - Can view any user
+        - `ROLE_STAFF` - Can view any user  
+        - Any authenticated user can view their own profile
+        
+        **Data Returned:** User profile information excluding sensitive data like passwords.
+      operationId: getUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique identifier of the user to retrieve
+          schema:
+            type: string
+          example: "admin001"
+      responses:
+        '200':
+          description: User information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponseDto'
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+        '404':
+          description: User not found
+
+  /users/delete:
+    delete:
+      tags:
+        - Users
+      summary: Delete a system user
+      description: |
+        Permanently removes a user from the system by their ID.
+        
+        **Required Permissions:** `ROLE_ADMIN`
+        
+        **Warning:** This action is irreversible. All user data will be permanently deleted.
+      operationId: deleteUser
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Unique identifier of the user to be deleted
+          schema:
+            type: string
+          example: "admin001"
+      responses:
+        '200':
+          description: User deleted successfully
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+        '404':
+          description: User not found
+
+  /users/edit:
+    put:
+      tags:
+        - Users
+      summary: Update user information
+      description: |
+        Updates a user's information such as name and role.
+        
+        **Required Permissions:** `ROLE_ADMIN`
+        
+        **Note:** Password cannot be changed through this endpoint. Use /users/change_password instead.
+      operationId: editUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserDto'
+      responses:
+        '200':
+          description: User information updated successfully
+        '400':
+          description: Invalid request body or validation errors
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+        '404':
+          description: User not found
+
+  /users/change_password:
+    put:
+      tags:
+        - Users
+      summary: Change user password
+      description: |
+        Updates the password for a specific user.
+        
+        **Required Permissions:** `ROLE_ADMIN`
+        
+        **Security Notes:**
+        - The new password will be securely hashed before storage
+        - User should be notified of the password change through other means
+      operationId: changeUserPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordDto'
+      responses:
+        '200':
+          description: Password changed successfully
+        '400':
+          description: Invalid request body or validation errors
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+        '404':
+          description: User not found
+
+  # Student Management endpoints
+  /students:
+    post:
+      tags:
+        - Students
+      summary: Create a new student account
+      description: |
+        Creates a new student account in the system with academic information.
+        
+        A default password is automatically generated based on the student's first name and ID 
+        in the format: {firstName}_{studentId}
+        
+        **Required Permissions:** `ROLE_ADMIN` or `ROLE_STAFF`
+        
+        **Business Rules:**
+        - Student ID must be unique across the system
+        - Password is auto-generated and should be changed on first login
+        - Photo is optional and can be added later
+      operationId: createStudent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentDto'
+      responses:
+        '200':
+          description: Student account created successfully
+        '400':
+          description: Invalid request body or validation errors
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied - User does not have ADMIN or STAFF role
+        '409':
+          description: Conflict - Student with the provided ID already exists
+
+  /students/{id}:
+    get:
+      tags:
+        - Students
+      summary: Retrieve student information by ID
+      description: |
+        Retrieves detailed information for a specific student, including their profile and summary statistics.
+        
+        **Required Permissions:** 
+        - `ROLE_ADMIN` - Can view any student's information
+        - `ROLE_STAFF` - Can view any student's information
+        - Students can only view their own information
+        
+        **Data Returned:** Complete student profile including academic information, occurrence statistics, and feedback summary.
+      operationId: getStudentInfo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique identifier of the student to retrieve
+          schema:
+            type: string
+          example: "20240001"
+      responses:
+        '200':
+          description: Student information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentAndFeedbackResponseDto'
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+        '404':
+          description: Student not found
+
+  /students/{id}/occurrences:
+    get:
+      tags:
+        - Students
+      summary: Retrieve student occurrences
+      description: |
+        Retrieves a paginated list of occurrences for a specific student, with optional filters.
+        
+        **Required Permissions:** 
+        - `ROLE_ADMIN` - Can view any student's occurrences
+        - `ROLE_STAFF` - Can view any student's occurrences
+        - Students can only view their own occurrences
+        
+        **Features:**
+        - Paginated results sorted by date (newest first)
+        - Configurable filters for date range, occurrence type, etc.
+        - Includes associated feedback and proof files
+      operationId: getStudentOccurrences
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Student ID to retrieve occurrences for
+          schema:
+            type: string
+          example: "20240001"
+        - name: startDate
+          in: query
+          description: Filter occurrences from this date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+          example: "2024-01-01"
+        - name: endDate
+          in: query
+          description: Filter occurrences until this date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+          example: "2024-12-31"
+        - name: type
+          in: query
+          description: Filter by occurrence type
+          schema:
+            type: string
+          example: "PHONE_USAGE"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: sort
+          in: query
+          schema:
+            type: string
+            default: "date,desc"
+      responses:
+        '200':
+          description: Student occurrences retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OccurrenceResponseDto'
+                  totalElements:
+                    type: integer
+                  totalPages:
+                    type: integer
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+        '404':
+          description: Student not found
+
+  /students/delete:
+    delete:
+      tags:
+        - Students
+      summary: Delete a student account
+      description: |
+        Permanently removes a student account from the system by their ID.
+        
+        **Required Permissions:** `ROLE_ADMIN` or `ROLE_STAFF`
+        
+        **Warning:** This action is irreversible. All student data including occurrences and feedback will be permanently deleted.
+      operationId: deleteStudent
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Unique identifier of the student to be deleted
+          schema:
+            type: string
+          example: "20240001"
+      responses:
+        '200':
+          description: Student account deleted successfully
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+        '404':
+          description: Student not found
+
+  /students/edit:
+    put:
+      tags:
+        - Students
+      summary: Update student information
+      description: |
+        Updates a student's academic information such as name, course, and photo.
+        
+        **Required Permissions:** `ROLE_ADMIN` or `ROLE_STAFF`
+        
+        **Note:** Password cannot be changed through this endpoint. Use /students/change_password instead.
+      operationId: editStudent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentDto'
+      responses:
+        '200':
+          description: Student information updated successfully
+        '400':
+          description: Invalid request body or validation errors
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+        '404':
+          description: Student not found
+
+  /students/change_password:
+    put:
+      tags:
+        - Students
+      summary: Change student password
+      description: |
+        Updates the password for a specific student account.
+        
+        **Required Permissions:** `ROLE_ADMIN` or `ROLE_STAFF`
+        
+        **Security Notes:**
+        - The new password will be securely hashed before storage
+        - Student should be notified of the password change through appropriate channels
+      operationId: changeStudentPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordDto'
+      responses:
+        '200':
+          description: Student password changed successfully
+        '400':
+          description: Invalid request body or validation errors
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+        '404':
+          description: Student not found
+
+  /students/autocomplete:
+    get:
+      tags:
+        - Students
+      summary: Student search autocomplete
+      description: |
+        Provides autocomplete functionality for searching students by ID or name.
+        Returns a list of students whose ID or name starts with the provided query string.
+        
+        **Required Permissions:** `ROLE_ADMIN`, `ROLE_STAFF` or `ROLE_TEACHER`
+        
+        **Use Cases:**
+        - Search bars in occurrence reporting forms
+        - Quick student lookup in administrative interfaces
+        - Teacher tools for classroom management
+        
+        **Performance:** Optimized for fast response times with limited result sets.
+      operationId: studentAutoComplete
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: Search query - beginning of student ID or name
+          schema:
+            type: string
+          example: "alice"
+      responses:
+        '200':
+          description: Autocomplete results retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StudentResponseDto'
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+
+  # Occurrence Management endpoints
+  /occurrences:
+    post:
+      tags:
+        - Occurrences
+      summary: Create a new occurrence (External API)
+      description: |
+        Creates a new occurrence in the system. This endpoint is designed for external systems 
+        such as computer vision services and does not require user authentication.
+        
+        **Required Permissions:** None - Public endpoint for external systems
+        
+        **Use Cases:**
+        - Automated detection systems reporting incidents
+        - Camera systems with AI analysis
+        - IoT devices detecting policy violations
+        
+        **Features:**
+        - Automatic WebSocket notification to connected clients
+        - Optional proof file upload with secure storage
+        - Immediate availability for staff review
+      operationId: createOccurrence
+      security: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OccurrenceDto'
+      responses:
+        '200':
+          description: Occurrence created successfully and notifications sent
+        '400':
+          description: Invalid input data or proof file issues
+        '500':
+          description: Server error - Failed to save proof file or process occurrence
+
+    get:
+      tags:
+        - Occurrences
+      summary: Retrieve all occurrences with filtering
+      description: |
+        Retrieves a paginated list of all occurrences in the system with comprehensive filtering options.
+        
+        **Required Permissions:** `ROLE_ADMIN` or `ROLE_STAFF`
+        
+        **Features:**
+        - Advanced filtering by date range, student, type, location, camera
+        - Paginated results with configurable sorting
+        - Performance optimized for large datasets
+        - Real-time data with latest occurrences
+        
+        **Default Sorting:** By date (newest first)
+      operationId: getAllOccurrences
+      parameters:
+        - name: studentId
+          in: query
+          description: Filter by specific student ID
+          schema:
+            type: string
+          example: "20240001"
+        - name: type
+          in: query
+          description: Filter by occurrence type
+          schema:
+            type: string
+          example: "PHONE_USAGE"
+        - name: startDate
+          in: query
+          description: Filter occurrences from this date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+          example: "2024-01-01"
+        - name: endDate
+          in: query
+          description: Filter occurrences until this date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+          example: "2024-12-31"
+        - name: location
+          in: query
+          description: Filter by occurrence location
+          schema:
+            type: string
+          example: "Classroom A"
+        - name: camera
+          in: query
+          description: Filter by camera identifier
+          schema:
+            type: string
+          example: "CAM_001"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: sort
+          in: query
+          schema:
+            type: string
+            default: "date,desc"
+      responses:
+        '200':
+          description: Occurrences retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OccurrenceResponseDto'
+                  totalElements:
+                    type: integer
+                  totalPages:
+                    type: integer
+        '400':
+          description: Invalid filter parameters
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+
+  /occurrences/{id}:
+    get:
+      tags:
+        - Occurrences
+      summary: Retrieve occurrence details by ID
+      description: |
+        Retrieves comprehensive information about a specific occurrence including proof files and feedback.
+        
+        **Required Permissions:** 
+        - `ROLE_ADMIN` - Can view any occurrence
+        - `ROLE_STAFF` - Can view any occurrence
+        - Students can only view their own occurrences
+        
+        **Data Returned:** Complete occurrence details including proof files, feedback, and metadata.
+      operationId: getOccurrence
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique UUID identifier of the occurrence
+          schema:
+            type: string
+            format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+      responses:
+        '200':
+          description: Occurrence details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OccurrenceResponseDto'
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+        '404':
+          description: Occurrence not found
+
+  /occurrences/waiting-feedback:
+    get:
+      tags:
+        - Occurrences
+      summary: Retrieve occurrences awaiting feedback
+      description: |
+        Retrieves all occurrences that have not yet received feedback/review from staff.
+        This endpoint is optimized for staff workflows and review queues.
+        
+        **Required Permissions:** `ROLE_ADMIN` or `ROLE_STAFF`
+        
+        **Use Cases:**
+        - Staff review dashboard
+        - Automated workflow prioritization
+        - Pending items notifications
+        
+        **Performance:** Returns non-paginated results sorted by creation date.
+      operationId: getAllWaitingFeedback
+      responses:
+        '200':
+          description: Pending occurrences retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OccurrenceResponseDto'
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+
+  /occurrences/feedback:
+    post:
+      tags:
+        - Occurrences
+      summary: Submit feedback for an occurrence
+      description: |
+        Submits staff feedback and review decision for a specific occurrence.
+        This action marks the occurrence as reviewed and may trigger student notifications.
+        
+        **Required Permissions:** `ROLE_ADMIN` or `ROLE_STAFF`
+        
+        **Features:**
+        - Approval/rejection workflow
+        - Optional detailed comments
+        - Student association for confirmed occurrences
+        - Automatic WebSocket notifications
+        - Audit trail for all feedback actions
+      operationId: occurrenceFeedback
+      parameters:
+        - name: occurrenceId
+          in: query
+          required: true
+          description: UUID of the occurrence to provide feedback for
+          schema:
+            type: string
+            format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackDto'
+      responses:
+        '200':
+          description: Feedback submitted successfully and notifications sent
+        '400':
+          description: Invalid feedback data or validation errors
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+        '404':
+          description: Occurrence or specified student not found
+        '409':
+          description: Conflict - Feedback already exists for this occurrence
+
+  /occurrences/delete:
+    delete:
+      tags:
+        - Occurrences
+      summary: Delete an occurrence
+      description: |
+        Permanently removes an occurrence from the system including associated proof files.
+        
+        **Required Permissions:** `ROLE_ADMIN` or `ROLE_STAFF`
+        
+        **Warning:** This action is irreversible. All occurrence data including proof files 
+        and feedback will be permanently deleted from both database and file storage.
+        
+        **Use Cases:**
+        - Removing false positives
+        - Data cleanup operations
+        - Privacy compliance (right to be forgotten)
+      operationId: deleteOccurrence
+      parameters:
+        - name: occurrenceId
+          in: query
+          required: true
+          description: UUID of the occurrence to delete
+          schema:
+            type: string
+            format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+      responses:
+        '200':
+          description: Occurrence and associated files deleted successfully
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+        '404':
+          description: Occurrence not found
+        '500':
+          description: Server error - Failed to delete proof file from storage
+
+  # Charts and Analytics endpoints
+  /charts:
+    get:
+      tags:
+        - Charts
+      summary: Retrieve comprehensive analytics data
+      description: |
+        Retrieves aggregated data for various charts and analytics visualizations.
+        This endpoint provides a comprehensive overview of system metrics and trends.
+        
+        **Required Permissions:** `ROLE_ADMIN` or `ROLE_STAFF`
+        
+        **Data Included:**
+        - Occurrences by time periods (daily and hourly trends)
+        - Geographic distribution (camera and location-based data)
+        - Occurrence type analysis and evolution over time
+        - Student feedback and performance metrics
+        
+        **Use Cases:**
+        - Administrative dashboards
+        - Performance monitoring
+        - Trend analysis and reporting
+        - Data-driven decision making
+        
+        **Performance:** Optimized queries with aggregated data for fast response times.
+      operationId: getChartsData
+      responses:
+        '200':
+          description: Analytics data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChartsDataDto'
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+        '500':
+          description: Server error - Failed to aggregate analytics data
+
+tags:
+  - name: Authentication
+    description: Authentication and session management endpoints
+  - name: Users
+    description: User management endpoints for administrators and staff
+  - name: Students
+    description: Student management endpoints for academic institutions
+  - name: Occurrences
+    description: Occurrence management and monitoring endpoints for academic misconduct tracking
+  - name: Charts
+    description: Analytics and data visualization endpoints for administrative dashboards
