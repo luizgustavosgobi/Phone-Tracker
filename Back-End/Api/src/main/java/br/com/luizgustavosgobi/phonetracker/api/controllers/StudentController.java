@@ -12,6 +12,7 @@ import br.com.luizgustavosgobi.phonetracker.api.models.StudentModel;
 import br.com.luizgustavosgobi.phonetracker.api.repositories.OccurrenceRepository;
 import br.com.luizgustavosgobi.phonetracker.api.repositories.StudentRepository;
 import br.com.luizgustavosgobi.phonetracker.api.services.OccurrenceService;
+import br.com.luizgustavosgobi.phonetracker.api.services.TempTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -43,6 +44,7 @@ public class StudentController {
     @Autowired StudentRepository studentRepository;
 
     @Autowired OccurrenceService occurrenceService;
+    @Autowired TempTokenService tempTokenService;
 
     @Autowired OccurrenceMapper occurrenceMapper;
     @Autowired StudentMapper studentMapper;
@@ -121,7 +123,8 @@ public class StudentController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Student with the given id not found");
 
         Page<OccurrenceResponseDto> occurrencePage = occurrenceRepository.findAll(occurrenceService.buildQuerySpecification(filters), pageable)
-                .map(occurrenceMapper::toDto);
+                .map(occurrenceMapper::toDto)
+                .map(dto -> dto.getProof() != null ? dto.processFeedbackFile(tempTokenService.generateTempToken(dto.getProof())) : dto);
         return ResponseEntity.ok(occurrencePage);
     }
 

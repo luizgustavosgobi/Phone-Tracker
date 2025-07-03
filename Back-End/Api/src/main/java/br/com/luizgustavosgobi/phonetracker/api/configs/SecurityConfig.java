@@ -23,8 +23,9 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http.csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests((authorize) -> authorize
-                        .requestMatchers(HttpMethod.POST, "/accounts/login").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/accounts/logout").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/proofs/public/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html",
                                         "/v3/api-docs/**", "/swagger-resources/**",
                                         "/webjars/**", "/api-docs/**").permitAll()

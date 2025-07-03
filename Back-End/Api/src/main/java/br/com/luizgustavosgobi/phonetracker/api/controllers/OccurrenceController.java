@@ -13,6 +13,8 @@ import br.com.luizgustavosgobi.phonetracker.api.repositories.FeedbackRepository;
 import br.com.luizgustavosgobi.phonetracker.api.repositories.OccurrenceRepository;
 import br.com.luizgustavosgobi.phonetracker.api.repositories.StudentRepository;
 import br.com.luizgustavosgobi.phonetracker.api.services.OccurrenceService;
+import br.com.luizgustavosgobi.phonetracker.api.services.ProofsService;
+import br.com.luizgustavosgobi.phonetracker.api.services.TempTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -47,6 +49,8 @@ public class OccurrenceController {
     @Autowired private StudentRepository studentRepository;
 
     @Autowired private OccurrenceService occurrenceService;
+    @Autowired private ProofsService proofsService;
+    @Autowired private TempTokenService tempTokenService;
 
     @Autowired private SimpMessagingTemplate messagingTemplate;
 
@@ -57,8 +61,8 @@ public class OccurrenceController {
         BeanUtils.copyProperties(occurrenceDto, occurrenceModel);
 
         if (occurrenceDto.proof() != null) {
-            String fileName = occurrenceService.saveOccurrenceFile(occurrenceDto.proof());
-            occurrenceModel.setProofFile(fileName);
+            String fileName = proofsService.saveProofFile(occurrenceDto.proof());
+            occurrenceModel.setProof(fileName);
         }
 
         occurrenceRepository.save(occurrenceModel);
@@ -73,6 +77,7 @@ public class OccurrenceController {
         return new ResponseEntity<>(HttpStatus.OK);
     }
 
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF') or @occurrenceService.isUserAllowedToAccessOccurrence(#id, authentication.principal.username)")
     @Operation(summary = "Retrieve occurrence details by ID",
@@ -80,10 +85,12 @@ public class OccurrenceController {
     public ResponseEntity<OccurrenceResponseDto> getOccurrence(@PathVariable UUID id) {
         OccurrenceResponseDto occurrence = occurrenceRepository.findById(id)
                 .map(occurrenceMapper::toDto)
+                .map(dto -> dto.getProof() != null ? dto.processFeedbackFile(tempTokenService.generateTempToken(dto.getProof())) : dto)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Occurrence Not found"));
 
         return ResponseEntity.ok(occurrence);
     }
+
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
@@ -93,10 +100,12 @@ public class OccurrenceController {
             @ParameterObject @ModelAttribute OccurrenceFilterDto filters,
             @ParameterObject @PageableDefault(size = 20, sort = "date", direction = Sort.Direction.DESC) Pageable pageable) {
         Page<OccurrenceResponseDto> occurrences = occurrenceRepository.findAll(occurrenceService.buildQuerySpecification(filters), pageable)
-                .map(occurrenceMapper::toDto);
+                .map(occurrenceMapper::toDto)
+                .map(dto -> dto.getProof() != null ? dto.processFeedbackFile(tempTokenService.generateTempToken(dto.getProof())) : dto);
 
         return ResponseEntity.ok(occurrences);
     }
+
 
     @GetMapping("/waiting-feedback")
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
@@ -106,10 +115,12 @@ public class OccurrenceController {
         List<OccurrenceResponseDto> occurrencesWithoutFeedback = occurrenceRepository.findByFeedbackIsNull()
                 .stream()
                 .map(occurrenceMapper::toDto)
+                .map(dto -> dto.getProof() != null ? dto.processFeedbackFile(tempTokenService.generateTempToken(dto.getProof())) : dto)
                 .toList();
 
         return ResponseEntity.ok(occurrencesWithoutFeedback);
     }
+
 
     @PostMapping("/feedback")
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
@@ -148,6 +159,7 @@ public class OccurrenceController {
         return new ResponseEntity<>(HttpStatus.OK);
     }
 
+
     @DeleteMapping("/delete")
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
     @Operation(summary = "Delete an occurrence",
@@ -156,8 +168,8 @@ public class OccurrenceController {
         OccurrenceModel occurrence = occurrenceRepository.findById(occurrenceId)
                 .orElseThrow(() -> new  ResponseStatusException(HttpStatus.NOT_FOUND, "An occurrence with the given ID not found"));
 
-        if  (occurrence.getProofFile() != null)
-            occurrenceService.deleteOccurrenceFile(occurrence.getProofFile());
+        if  (occurrence.getProof() != null)
+            proofsService.deleteProofFile(occurrence.getProof());
 
         occurrenceRepository.deleteById(occurrenceId);
 

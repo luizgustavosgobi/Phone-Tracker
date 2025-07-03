@@ -13,6 +13,7 @@ public class OccurrenceResponseDto {
     private LocalDateTime date;
     private OccurrenceType type;
     private String cameraId;
+    private String proof;
     private FeedbackDTO feedback;
 
     @Data
@@ -26,5 +27,11 @@ public class OccurrenceResponseDto {
     public static class StudentDTO {
         private String id;
         private String name;
+    }
+
+    public OccurrenceResponseDto processFeedbackFile(String token) {
+        if (token != null)
+            this.setProof(token);
+        return this;
     }
 }
