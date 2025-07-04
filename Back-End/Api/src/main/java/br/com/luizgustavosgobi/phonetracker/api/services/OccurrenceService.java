@@ -21,7 +21,7 @@ public class OccurrenceService {
 
     public Specification<OccurrenceModel> buildQuerySpecification(OccurrenceFilterDto filters) {
         if (filters.getStartDate() != null && filters.getEndDate() != null && filters.getStartDate().isAfter(filters.getEndDate()))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Start date must be after end date");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Start date must be before end date");
 
         return (root, _, cb) -> {
             List<Predicate> predicates = new ArrayList<>();

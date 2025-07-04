@@ -22,6 +22,10 @@ public class ProofsService {
         if (originalFileName == null)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Proof file name is null");
 
+        if (!originalFileName.contains(".")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Proof file name must contain an extension");
+        }
+
         String fileExtension = originalFileName.substring(originalFileName.lastIndexOf("."));
         String newFileName = UUID.randomUUID() + fileExtension;
 
