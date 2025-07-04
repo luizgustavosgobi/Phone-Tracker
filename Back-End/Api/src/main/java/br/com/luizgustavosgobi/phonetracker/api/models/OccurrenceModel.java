@@ -27,7 +27,7 @@ public class OccurrenceModel implements Serializable {
     @NotNull private Integer cameraId;
 
     private String local;
-    private String proofFile;
+    private String proof;
 
     @NotNull @Enumerated(EnumType.STRING)
     private OccurrenceType type = OccurrenceType.CELLPHONE;

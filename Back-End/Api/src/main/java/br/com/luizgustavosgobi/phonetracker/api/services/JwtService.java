@@ -49,9 +49,7 @@ public class JwtService {
                 paddedKey[i] = (byte) (keyBytes[i % keyBytes.length] ^ 0x55);
             }
             SECRET_KEY = Keys.hmacShaKeyFor(paddedKey);
-        } else {
-            SECRET_KEY = Keys.hmacShaKeyFor(keyBytes);
-        }
+        } else SECRET_KEY = Keys.hmacShaKeyFor(keyBytes);
     }
 
     // Generate
