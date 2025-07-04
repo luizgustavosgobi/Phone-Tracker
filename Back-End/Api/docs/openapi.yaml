@@ -62,16 +62,12 @@ components:
         id:
           type: string
           description: User or student unique identifier
-          minLength: 3
-          maxLength: 50
           pattern: '^[a-zA-Z0-9_]+$'
           example: "admin001"
         password:
           type: string
           format: password
           description: User password (will be validated against stored hash)
-          minLength: 6
-          maxLength: 100
           example: "password123"
       description: Credentials required for user authentication
 
@@ -105,8 +101,6 @@ components:
         name:
           type: string
           description: Full name of the user
-          minLength: 2
-          maxLength: 100
           pattern: '^[a-zA-Z\s]+$'
           example: "John Smith"
         role:
@@ -141,21 +135,15 @@ components:
         id:
           type: string
           description: User or student ID whose password will be changed
-          minLength: 3
-          maxLength: 50
           example: "admin001"
         oldPassword:
           type: string
           format: password
           description: Current password (optional, used for self-service password changes)
-          minLength: 6
-          maxLength: 100
         newPassword:
           type: string
           format: password
           description: New password (must meet security requirements)
-          minLength: 8
-          maxLength: 100
           pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]'
           example: "NewSecure123!"
       description: Password change request data
@@ -171,28 +159,21 @@ components:
         id:
           type: string
           description: Unique student identifier (typically student ID number)
-          minLength: 3
-          maxLength: 20
           pattern: '^[a-zA-Z0-9]+$'
           example: "20240001"
         name:
           type: string
           description: Full name of the student
-          minLength: 2
-          maxLength: 100
           pattern: '^[a-zA-ZÀ-ÿ\s]+$'
           example: "Alice Johnson"
         course:
           type: string
           description: Student's course or program of study
-          minLength: 2
-          maxLength: 100
           example: "Computer Science"
         photo:
           type: string
           format: byte
-          description: Base64 encoded profile photo (optional, max 2MB)
-          maxLength: 2800000
+          description: Base64 encoded profile photo (optional)
           example: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ..."
       description: Student account information for academic management
 
@@ -200,12 +181,6 @@ components:
       allOf:
         - $ref: '#/components/schemas/StudentDto'
         - type: object
-          properties:
-            createdAt:
-              type: string
-              format: date-time
-              description: Account creation timestamp (UTC)
-              example: "2024-01-01T12:00:00.000Z"
       description: Student information returned in API responses
 
     StudentAndFeedbackResponseDto:
@@ -215,36 +190,9 @@ components:
           properties:
             occurrences:
               type: array
-              description: Recent feedback/occurrences for this student (max 10 most recent)
-              maxItems: 10
+              description: Recent feedback/occurrences for this student
               items:
                 $ref: '#/components/schemas/FeedbackSummaryDto'
-            totalOccurrences:
-              type: integer
-              description: Total number of occurrences for this student
-              minimum: 0
-              example: 5
-            approvedOccurrences:
-              type: integer
-              description: Number of approved occurrences
-              minimum: 0
-              example: 3
-            rejectedOccurrences:
-              type: integer
-              description: Number of rejected occurrences
-              minimum: 0
-              example: 2
-            pendingOccurrences:
-              type: integer
-              description: Number of occurrences awaiting review
-              minimum: 0
-              example: 0
-            lastOccurrenceDate:
-              type: string
-              format: date-time
-              description: Date of most recent occurrence (null if no occurrences)
-              nullable: true
-              example: "2024-01-15T14:30:00.000Z"
       description: Complete student profile with occurrence statistics and recent feedback
 
     FeedbackSummaryDto:
@@ -265,12 +213,6 @@ components:
           enum: [APPROVED, REJECTED, PENDING]
           description: Review status of the occurrence
           example: "APPROVED"
-        reviewDate:
-          type: string
-          format: date-time
-          description: When the review was completed (null if pending)
-          nullable: true
-          example: "2024-01-15T15:00:00.000Z"
       description: Summary of feedback for student profile display
 
     # Occurrence Management DTOs
@@ -300,13 +242,10 @@ components:
         cameraId:
           type: integer
           description: Numeric identifier of the camera that detected the occurrence
-          minimum: 1
-          maximum: 9999
           example: 1
         local:
           type: string
           description: Location where the occurrence happened (optional)
-          maxLength: 100
           example: "Classroom A"
         proof:
           type: string
@@ -346,14 +285,6 @@ components:
           description: Filename of the proof file (null if no proof available)
           nullable: true
           example: "proof_20240115_143000.jpg"
-        confidence:
-          type: number
-          format: float
-          description: AI confidence level (0.0 to 1.0, null if not AI-detected)
-          minimum: 0.0
-          maximum: 1.0
-          nullable: true
-          example: 0.95
         feedback:
           $ref: '#/components/schemas/FeedbackResponseDto'
       description: Complete occurrence information with optional feedback
@@ -366,13 +297,10 @@ components:
         studentId:
           type: string
           description: Student ID to associate with approved occurrence (required for APPROVED status)
-          minLength: 3
-          maxLength: 20
           example: "20240001"
         comments:
           type: string
           description: Staff comments about the occurrence review (optional)
-          maxLength: 1000
           example: "Valid occurrence confirmed after manual review"
         status:
           type: string
@@ -450,9 +378,9 @@ components:
           example: "PENDING"
         type:
           type: string
-          enum: [PHONE_USAGE, SLEEPING, TALKING, EATING, OTHER]
+          enum: [PHONE, TALKING, OTHER]
           description: Filter by occurrence type
-          example: "PHONE_USAGE"
+          example: "PHONE"
         cameraId:
           type: integer
           description: Filter by camera ID
@@ -461,7 +389,6 @@ components:
         local:
           type: string
           description: Filter by location (partial match)
-          maxLength: 100
           example: "Classroom"
         studentId:
           type: string
@@ -506,7 +433,6 @@ components:
           description: Daily occurrence counts (last 30 days)
           additionalProperties:
             type: integer
-            minimum: 0
           example:
             "2024-01-15": 12
             "2024-01-16": 8
