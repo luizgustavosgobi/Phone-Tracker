@@ -155,4 +155,13 @@ public class StudentController {
 
         return ResponseEntity.ok(students);
     }
+
+    @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @Operation(summary = "Retrieve all system Students", description = "**Required Permissions:** ROLE_ADMIN or ROLE_STAFF")
+    public ResponseEntity<Page<StudentResponseDto>> getAllUsers(@ParameterObject @PageableDefault(size = 20, sort = "name") Pageable pageable) {
+        Page<StudentResponseDto> accounts = studentRepository.findAll(pageable)
+                .map(studentMapper::toStudentDto);
+        return ResponseEntity.ok(accounts);
+    }
 }
