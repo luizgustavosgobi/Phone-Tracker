@@ -72,6 +72,7 @@ public class OccurrenceController {
                 "CREATED",
                 LocalDateTime.now()
         );
+
         messagingTemplate.convertAndSend("/topic/occurrences", notification);
 
         return new ResponseEntity<>(HttpStatus.OK);

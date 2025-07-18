@@ -1,5 +1,6 @@
 package br.com.luizgustavosgobi.phonetracker.api.dtos.responses;
 
+import br.com.luizgustavosgobi.phonetracker.api.enums.UserRoles;
 import lombok.Data;
 
 import java.util.Set;
@@ -11,6 +12,7 @@ public class StudentAndFeedbackResponseDto {
     String name;
     String photo;
     String course;
+    UserRoles role = UserRoles.STUDENT;
     Set<FeedbackDTO> occurrences;
 
     @Data
