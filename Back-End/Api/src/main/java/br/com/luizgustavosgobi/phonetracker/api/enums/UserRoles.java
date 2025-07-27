@@ -5,5 +5,4 @@ public enum UserRoles {
     STAFF,
     TEACHER,
     STUDENT,
-    EXTERNAL
 }

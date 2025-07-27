@@ -12,6 +12,7 @@ import br.com.luizgustavosgobi.phonetracker.api.models.StudentModel;
 import br.com.luizgustavosgobi.phonetracker.api.repositories.FeedbackRepository;
 import br.com.luizgustavosgobi.phonetracker.api.repositories.OccurrenceRepository;
 import br.com.luizgustavosgobi.phonetracker.api.repositories.StudentRepository;
+import br.com.luizgustavosgobi.phonetracker.api.services.ApiKeyService;
 import br.com.luizgustavosgobi.phonetracker.api.services.OccurrenceService;
 import br.com.luizgustavosgobi.phonetracker.api.services.ProofsService;
 import br.com.luizgustavosgobi.phonetracker.api.services.TempTokenService;
@@ -51,12 +52,14 @@ public class OccurrenceController {
     @Autowired private OccurrenceService occurrenceService;
     @Autowired private ProofsService proofsService;
     @Autowired private TempTokenService tempTokenService;
+    @Autowired private ApiKeyService apiKeyService;
 
     @Autowired private SimpMessagingTemplate messagingTemplate;
 
     @PostMapping("/create")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'TEACHER') or @apiKeyService.isKeyValid(#api_key)")
     @Operation(summary = "Create a new occurrence (External API)", description = "**Required Permissions:** None - Public endpoint")
-    public ResponseEntity<Void> createOccurrences(@ModelAttribute @Valid OccurrenceDto occurrenceDto) {
+    public ResponseEntity<Void> createOccurrences(@ModelAttribute @Valid OccurrenceDto occurrenceDto, @ParameterObject String api_key) {
         OccurrenceModel occurrenceModel = new OccurrenceModel();
         BeanUtils.copyProperties(occurrenceDto, occurrenceModel);
 
