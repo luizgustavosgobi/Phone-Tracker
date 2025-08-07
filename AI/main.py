@@ -42,7 +42,7 @@ def process_camera(camera_id, camera_url, camera_local):
                 if box.id is not None:
                     track_id = int(box.id[0])
                 
-                if track_id is not None and not isNotified(track_id) and name == "using_cellphone" and conf > THRESHOLD:
+                if track_id is not None and not isNotified(camera_id, track_id) and name == "using_cellphone" and conf > THRESHOLD:
                     crop = frame[y1:y2, x1:x2]
                     if crop.size > 0:
                         features = extract_features(crop)
@@ -69,7 +69,7 @@ def main():
         threads.append(thread)
         print(f"Thread started for camera {camera_id}")
 
-    thread = threading.Thread(target=deleteExpiredIds(), daemon=True)
+    thread = threading.Thread(target=deleteExpiredIds, daemon=True)
     thread.start()
     
     for thread in threads:

@@ -11,6 +11,7 @@ import br.com.luizgustavosgobi.phonetracker.api.models.OccurrenceModel;
 import br.com.luizgustavosgobi.phonetracker.api.models.StudentModel;
 import br.com.luizgustavosgobi.phonetracker.api.repositories.FeedbackRepository;
 import br.com.luizgustavosgobi.phonetracker.api.repositories.OccurrenceRepository;
+import br.com.luizgustavosgobi.phonetracker.api.repositories.StudentEmbeddingsRepository;
 import br.com.luizgustavosgobi.phonetracker.api.repositories.StudentRepository;
 import br.com.luizgustavosgobi.phonetracker.api.services.ApiKeyService;
 import br.com.luizgustavosgobi.phonetracker.api.services.OccurrenceService;
@@ -19,6 +20,7 @@ import br.com.luizgustavosgobi.phonetracker.api.services.TempTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.beans.BeanUtils;
@@ -48,6 +50,7 @@ public class OccurrenceController {
     @Autowired private FeedbackRepository feedbackRepository;
     @Autowired private OccurrenceMapper occurrenceMapper;
     @Autowired private StudentRepository studentRepository;
+    @Autowired private StudentEmbeddingsRepository studentEmbeddingsRepository;
 
     @Autowired private OccurrenceService occurrenceService;
     @Autowired private ProofsService proofsService;
@@ -125,9 +128,9 @@ public class OccurrenceController {
         return ResponseEntity.ok(occurrencesWithoutFeedback);
     }
 
-
     @PostMapping("/feedback")
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @Transactional
     @Operation(summary = "Submit feedback for an occurrence",
                description = "**Required Permissions:** ROLE_ADMIN or ROLE_STAFF")
     public ResponseEntity<Void> occurrenceFeedback(@RequestParam UUID occurrenceId, @RequestBody @Valid FeedbackDto feedbackDto) {
@@ -145,6 +148,7 @@ public class OccurrenceController {
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "An student with the given Id not found"));
 
             feedbackModel.setStudent(user);
+            studentEmbeddingsRepository.linkEmbeddingsToStudent(user, occurrence.getInferenceMetadata().getTrackingId());
         }
 
         feedbackModel.setOccurrence(occurrence);
