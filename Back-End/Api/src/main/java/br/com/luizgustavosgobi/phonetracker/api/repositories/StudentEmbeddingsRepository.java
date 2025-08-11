@@ -10,6 +10,6 @@ import org.springframework.data.repository.query.Param;
 public interface StudentEmbeddingsRepository extends JpaRepository<StudentEmbeddingsModel, String> {
 
     @Modifying
-    @Query("UPDATE StudentEmbeddingsModel se SET se.student = :student WHERE se.trackingId = :trackingId")
+    @Query("UPDATE StudentEmbeddingsModel se SET se.student = :student WHERE se.trackingId = :trackingId AND se.student IS NULL")
     void linkEmbeddingsToStudent(@Param("student") StudentModel student, @Param("trackingId") Integer trackingId);
 }

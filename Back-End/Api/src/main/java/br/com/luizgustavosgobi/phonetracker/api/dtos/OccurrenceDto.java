@@ -12,6 +12,10 @@ public record OccurrenceDto(
         @NotNull OccurrenceType type,
         @NotNull Integer cameraId,
         String local,
+
+        Integer trackingId,
+        String predictedStudent,
+
         MultipartFile proof
 ) {
 }

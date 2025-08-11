@@ -1,15 +1,20 @@
 import math
 import threading
+from datetime import datetime
+
 import cv2 as cv
 import cvzone
+import yt_dlp
 
 from ultralytics import YOLO
 
-from managers.Id_manager import assign_global_id, isNotified, deleteExpiredIds
+from managers.Id_manager import assign_global_id, isNotified, isGlobalIdNotified, deleteExpiredIds, notify
 from services.reid_service import extract_features
 from parsers.camera_parser import parseCameraConfigFile
+from services.api_services import saveOccurrence, OccurrencesType
+from utils.image_utils import encodeToJpg
 
-THRESHOLD = 0.7
+THRESHOLD = 0.75
 
 classNames = [
     "cellphone",
@@ -33,21 +38,35 @@ def process_camera(camera_id, camera_url, camera_local):
                 x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
                 w, h = x2 - x1, y2 - y1
 
-                cvzone.cornerRect(frame, (x1, y1, w, h))
-
                 conf = math.ceil((box.conf[0] * 100)) / 100
                 name = classNames[int(box.cls[0])]
 
                 track_id = None
                 if box.id is not None:
                     track_id = int(box.id[0])
-                
+
                 if track_id is not None and not isNotified(camera_id, track_id) and name == "using_cellphone" and conf > THRESHOLD:
                     crop = frame[y1:y2, x1:x2]
                     if crop.size > 0:
                         features = extract_features(crop)
-                        global_id = assign_global_id(camera_id, track_id, features)
-                        cvzone.putTextRect(frame, f"{global_id}", (x1, y1 - 20))
+                        global_id, student_id = assign_global_id(camera_id, track_id, features)
+                        cvzone.cornerRect(frame, (x1, y1, w, h))
+                        cvzone.putTextRect(frame, f"{student_id if student_id else global_id}", (x1, y1 - 20))
+
+                        if not isGlobalIdNotified(global_id):
+                            notify(global_id)
+
+                            saveOccurrence(
+                                dateTime=datetime.now().isoformat(),
+                                local=camera_local,
+                                cameraId=camera_id,
+                                type=OccurrencesType.CELLPHONE,
+
+                                trackingId=global_id,
+                                predictedStudent=student_id,
+
+                                proofFile=("evidence.jpg", encodeToJpg(frame), 'image/jpg')
+                            )
 
         cv.imshow(f"YOLO Detection - Camera {camera_id}", results[0].plot())
         if cv.waitKey(1) & 0xFF == ord('q'):

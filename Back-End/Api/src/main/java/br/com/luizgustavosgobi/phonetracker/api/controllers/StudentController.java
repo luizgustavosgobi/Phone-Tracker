@@ -110,7 +110,7 @@ public class StudentController {
     }
 
     @GetMapping("/{id}/occurrences")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF') or #id = authentication.principal.username")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF') or #id == authentication.principal.username")
     @Operation(summary = "Retrieve student occurrences",
                description = "**Required Permissions:** ROLE_ADMIN, ROLE_STAFF, or own occurrences")
     public ResponseEntity<Page<OccurrenceResponseDto>> getStudentOccurrences(

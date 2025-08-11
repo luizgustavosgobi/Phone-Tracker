@@ -7,12 +7,10 @@ import br.com.luizgustavosgobi.phonetracker.api.dtos.OccurrenceNotificationDto;
 import br.com.luizgustavosgobi.phonetracker.api.dtos.responses.OccurrenceResponseDto;
 import br.com.luizgustavosgobi.phonetracker.api.mappers.OccurrenceMapper;
 import br.com.luizgustavosgobi.phonetracker.api.models.FeedbackModel;
+import br.com.luizgustavosgobi.phonetracker.api.models.OccurrenceInferenceMetadataModel;
 import br.com.luizgustavosgobi.phonetracker.api.models.OccurrenceModel;
 import br.com.luizgustavosgobi.phonetracker.api.models.StudentModel;
-import br.com.luizgustavosgobi.phonetracker.api.repositories.FeedbackRepository;
-import br.com.luizgustavosgobi.phonetracker.api.repositories.OccurrenceRepository;
-import br.com.luizgustavosgobi.phonetracker.api.repositories.StudentEmbeddingsRepository;
-import br.com.luizgustavosgobi.phonetracker.api.repositories.StudentRepository;
+import br.com.luizgustavosgobi.phonetracker.api.repositories.*;
 import br.com.luizgustavosgobi.phonetracker.api.services.ApiKeyService;
 import br.com.luizgustavosgobi.phonetracker.api.services.OccurrenceService;
 import br.com.luizgustavosgobi.phonetracker.api.services.ProofsService;
@@ -38,6 +36,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -51,6 +50,7 @@ public class OccurrenceController {
     @Autowired private OccurrenceMapper occurrenceMapper;
     @Autowired private StudentRepository studentRepository;
     @Autowired private StudentEmbeddingsRepository studentEmbeddingsRepository;
+    @Autowired private OccurrenceInferenceMetadataRepository inferenceMetadataRepository;
 
     @Autowired private OccurrenceService occurrenceService;
     @Autowired private ProofsService proofsService;
@@ -72,6 +72,18 @@ public class OccurrenceController {
         }
 
         occurrenceRepository.save(occurrenceModel);
+
+        if (occurrenceDto.trackingId() != null) {
+            OccurrenceInferenceMetadataModel inferenceMetadata = new OccurrenceInferenceMetadataModel();
+            inferenceMetadata.setOccurrence(occurrenceModel);
+            inferenceMetadata.setTrackingId(occurrenceDto.trackingId());
+            if (occurrenceDto.predictedStudent() != null) {
+                Optional<StudentModel> predictedStudent = studentRepository.findById(occurrenceDto.predictedStudent());
+                predictedStudent.ifPresent(inferenceMetadata::setPredictedStudent);
+            }
+
+            inferenceMetadataRepository.save(inferenceMetadata);
+        }
 
         OccurrenceNotificationDto notification = new OccurrenceNotificationDto(
                 occurrenceModel.getId(),
@@ -148,7 +160,12 @@ public class OccurrenceController {
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "An student with the given Id not found"));
 
             feedbackModel.setStudent(user);
-            studentEmbeddingsRepository.linkEmbeddingsToStudent(user, occurrence.getInferenceMetadata().getTrackingId());
+
+            OccurrenceInferenceMetadataModel inferenceMetadata = occurrence.getInferenceMetadata();
+            if (inferenceMetadata != null) {
+                studentEmbeddingsRepository.linkEmbeddingsToStudent(user, inferenceMetadata.getTrackingId());
+            }
+
         }
 
         feedbackModel.setOccurrence(occurrence);

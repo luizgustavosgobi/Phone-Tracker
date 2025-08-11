@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import Enum
 from requests import Response
 
@@ -13,12 +14,16 @@ class OccurrencesType(Enum):
 API_URL = getEnv("API_URL")
 API_KEY = getEnv("API_KEY")
 
-def saveOccurrence(dateTime:str, local: str, cameraId: int, type: OccurrencesType, proofFile) -> Response :
+def saveOccurrence(dateTime: str, local: str, cameraId: int, type: OccurrencesType, proofFile, trackingId: int|None = None, predictedStudent: str|None = None) -> Response :
     formData = {
         'date': (None, dateTime),
         'local': (None, local),
         'cameraId': (None, cameraId),
         'type': (None, type.value),
+
+        'trackingId': (None, trackingId),
+        'predictedStudent': (None, predictedStudent),
+        
         'proof': proofFile
     }
 

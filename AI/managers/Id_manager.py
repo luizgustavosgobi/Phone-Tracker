@@ -11,6 +11,7 @@ EXPIRATION_TIME = 5 # Seconds
 CLEANUP_INTERVAL = 10 # Seconds
 THRESHOLD = 0.7 # Float -> % Semelhança entre features
 
+global_track_ids_notified = set()
 id_map: dict[tuple[int, int], tuple[int, float]] = {} # (camera_id, track_id): (global_id, last_time)
 global_id_counter: int = 1
 
@@ -25,9 +26,15 @@ def addId(camera_id: int, track_id: int, global_track_id:int) -> None:
     id_map[(camera_id, track_id)] = (global_track_id, time.time())
 
 def isNotified(camera_id: int, track_id: int) -> bool:
-    return track_id in id_map and not time.time() - id_map[(camera_id, track_id)][1] > EXPIRATION_TIME
+    return (camera_id, track_id) in id_map
 
-def assign_global_id(camera_id: int, local_track_id: int, features: ndarray) -> int:
+def isGlobalIdNotified(global_track_id: int) -> bool:
+    return global_track_id in global_track_ids_notified
+
+def notify(global_track_id: int) -> None:
+    global_track_ids_notified.add(global_track_id)
+
+def assign_global_id(camera_id: int, local_track_id: int, features: ndarray) -> (int, str):
     key = (camera_id, local_track_id)
     with threading.Lock():
         if key in id_map:
@@ -43,16 +50,15 @@ def assign_global_id(camera_id: int, local_track_id: int, features: ndarray) -> 
 
             if similarity > THRESHOLD:
                 insert_db("INSERT INTO tb_student_embeddings (tracking_id, embedding) VALUES (%s, %s)", (tracking_id, normalized_features))
-
-                id = student_id if student_id else tracking_id
-                id_map[key] = (id, time.time())
-                return id
+                addId(camera_id, local_track_id, tracking_id)
+                return tracking_id, student_id
 
         global global_id_counter
         new_id = global_id_counter
         global_id_counter += 1
 
         insert_db("INSERT INTO tb_student_embeddings (tracking_id, embedding) VALUES (%s, %s)", (new_id, normalized_features))
-        id_map[key] = (new_id, time.time())
 
-        return new_id
+        addId(camera_id, local_track_id, new_id)
+
+        return new_id, None

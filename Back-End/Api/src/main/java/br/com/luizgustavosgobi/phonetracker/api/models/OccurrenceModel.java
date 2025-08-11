@@ -35,4 +35,6 @@ public class OccurrenceModel implements Serializable {
     @OneToOne(mappedBy = "occurrence", cascade = CascadeType.ALL, orphanRemoval = true)
     private FeedbackModel feedback;
 
+    @OneToOne(mappedBy = "occurrence", cascade = CascadeType.ALL, orphanRemoval = true)
+    private OccurrenceInferenceMetadataModel inferenceMetadata;
 }

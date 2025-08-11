@@ -20,7 +20,9 @@ public class StudentModel {
     @Id String id;
 
     @NotNull String name;
+
     String photo;
+
     @NotNull String course;
 
     @JsonIgnore
@@ -29,6 +31,8 @@ public class StudentModel {
     @OneToMany(mappedBy = "student", cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     private Set<FeedbackModel> occurrences;
 
+    @OneToMany(mappedBy = "student", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<StudentEmbeddingsModel> embeddings;
 
     @PreRemove
     private void preRemove() {
