@@ -7,5 +7,4 @@ public record OccurrenceNotificationDto (
         UUID occurrenceId,
         String action,
         LocalDateTime timestamp
-) {
-}
+) { }
