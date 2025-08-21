@@ -12,4 +12,8 @@ public interface StudentEmbeddingsRepository extends JpaRepository<StudentEmbedd
     @Modifying
     @Query("UPDATE StudentEmbeddingsModel se SET se.student = :student WHERE se.trackingId = :trackingId AND se.student IS NULL")
     void linkEmbeddingsToStudent(@Param("student") StudentModel student, @Param("trackingId") Integer trackingId);
+
+    @Modifying
+    @Query("DELETE FROM StudentEmbeddingsModel se WHERE se.trackingId = :trackingId AND se.student IS NULL")
+    void removeDiscardedEmbeddings(@Param("trackingId") Integer trackingId);
 }

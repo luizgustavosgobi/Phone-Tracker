@@ -5,6 +5,7 @@ import br.com.luizgustavosgobi.phonetracker.api.dtos.OccurrenceDto;
 import br.com.luizgustavosgobi.phonetracker.api.dtos.OccurrenceFilterDto;
 import br.com.luizgustavosgobi.phonetracker.api.dtos.OccurrenceNotificationDto;
 import br.com.luizgustavosgobi.phonetracker.api.dtos.responses.OccurrenceResponseDto;
+import br.com.luizgustavosgobi.phonetracker.api.enums.OccurrenceStatus;
 import br.com.luizgustavosgobi.phonetracker.api.mappers.OccurrenceMapper;
 import br.com.luizgustavosgobi.phonetracker.api.models.FeedbackModel;
 import br.com.luizgustavosgobi.phonetracker.api.models.OccurrenceInferenceMetadataModel;
@@ -154,6 +155,14 @@ public class OccurrenceController {
 
         FeedbackModel feedbackModel = new FeedbackModel();
         BeanUtils.copyProperties(feedbackDto, feedbackModel);
+
+        if (feedbackDto.status() == OccurrenceStatus.REJECTED) {
+            OccurrenceInferenceMetadataModel inferenceMetadata = occurrence.getInferenceMetadata();
+
+            if (inferenceMetadata != null) {
+                studentEmbeddingsRepository.removeDiscardedEmbeddings(inferenceMetadata.getTrackingId());
+            }
+        }
 
         if (feedbackDto.studentId() != null) {
             StudentModel user = studentRepository.findById(feedbackDto.studentId())

@@ -1,20 +1,21 @@
 import math
 import threading
+import time
 from datetime import datetime
 
 import cv2 as cv
 import cvzone
-import yt_dlp
 
 from ultralytics import YOLO
 
+from ReId.feature_extractor import FeatureExtractor
 from managers.Id_manager import assign_global_id, isNotified, isGlobalIdNotified, deleteExpiredIds, notify
 from services.reid_service import extract_features
 from parsers.camera_parser import parseCameraConfigFile
 from services.api_services import saveOccurrence, OccurrencesType
 from utils.image_utils import encodeToJpg
 
-THRESHOLD = 0.75
+THRESHOLD = 0.65
 
 classNames = [
     "cellphone",
@@ -24,7 +25,13 @@ classNames = [
 
 def process_camera(camera_id, camera_url, camera_local):
     cap = cv.VideoCapture(camera_url)
+
     model = YOLO("models/roboflowTrains/yolov11-Balanced.pt")
+    extractor = FeatureExtractor(
+        model_name='osnet_x1_0',
+        model_path='models/model.pth.tar-50',
+        device='cpu',
+    )
 
     while True:
         ret, frame = cap.read()
@@ -48,7 +55,8 @@ def process_camera(camera_id, camera_url, camera_local):
                 if track_id is not None and not isNotified(camera_id, track_id) and name == "using_cellphone" and conf > THRESHOLD:
                     crop = frame[y1:y2, x1:x2]
                     if crop.size > 0:
-                        features = extract_features(crop)
+                        features = extractor.extract(crop)
+                        #features = extract_features(crop)
                         global_id, student_id = assign_global_id(camera_id, track_id, features)
                         cvzone.cornerRect(frame, (x1, y1, w, h))
                         cvzone.putTextRect(frame, f"{student_id if student_id else global_id}", (x1, y1 - 20))
@@ -74,7 +82,7 @@ def process_camera(camera_id, camera_url, camera_local):
 
     cap.release()
 
-def main():
+if __name__ == "__main__":
     cameras = parseCameraConfigFile()
     threads = []
 
@@ -86,13 +94,11 @@ def main():
         )
         thread.start()
         threads.append(thread)
+
         print(f"Thread started for camera {camera_id}")
 
     thread = threading.Thread(target=deleteExpiredIds, daemon=True)
     thread.start()
-    
+
     for thread in threads:
         thread.join()
-
-if __name__ == "__main__":
-    main()

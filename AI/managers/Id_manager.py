@@ -34,22 +34,21 @@ def isGlobalIdNotified(global_track_id: int) -> bool:
 def notify(global_track_id: int) -> None:
     global_track_ids_notified.add(global_track_id)
 
-def assign_global_id(camera_id: int, local_track_id: int, features: ndarray) -> (int, str):
+def assign_global_id(camera_id: int, local_track_id: int, embedding: ndarray) -> (int, str):
     key = (camera_id, local_track_id)
     with threading.Lock():
         if key in id_map:
             return id_map[key][0]
 
-        normalized_features = features / np.linalg.norm(features)
+        normalized_embedding = embedding / np.linalg.norm(embedding)
 
         result = query_db("SELECT student_id, tracking_id, 1 - (embedding <=> %s) AS similarity FROM tb_student_embeddings ORDER BY similarity DESC LIMIT 1",
-                          (normalized_features,))
+                          (normalized_embedding,))
 
         if result is not None and len(result) > 0:
             student_id, tracking_id, similarity = result[0]
 
             if similarity > THRESHOLD:
-                insert_db("INSERT INTO tb_student_embeddings (tracking_id, embedding) VALUES (%s, %s)", (tracking_id, normalized_features))
                 addId(camera_id, local_track_id, tracking_id)
                 return tracking_id, student_id
 
@@ -57,7 +56,7 @@ def assign_global_id(camera_id: int, local_track_id: int, features: ndarray) -> 
         new_id = global_id_counter
         global_id_counter += 1
 
-        insert_db("INSERT INTO tb_student_embeddings (tracking_id, embedding) VALUES (%s, %s)", (new_id, normalized_features))
+        insert_db("INSERT INTO tb_student_embeddings (tracking_id, embedding) VALUES (%s, %s)", (new_id, normalized_embedding))
 
         addId(camera_id, local_track_id, new_id)
 

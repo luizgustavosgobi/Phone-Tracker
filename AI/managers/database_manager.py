@@ -16,14 +16,20 @@ def create_db_conn():
     return conn
 
 def query_db(query, params):
-    with create_db_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, params)
-            result = cur.fetchall()
-            return result
+    try:
+        with create_db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                result = cur.fetchall()
+                return result
+    except psycopg2.Error as e:
+        print(e)
 
 def insert_db(query, params):
-    with create_db_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, params)
-            conn.commit()
+    try:
+        with create_db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                conn.commit()
+    except psycopg2.Error as e:
+        print(e)

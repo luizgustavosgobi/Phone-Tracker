@@ -1,0 +1,12 @@
+opencv-python
+numpy
+av
+cvzone
+ultralytics
+python-dotenv
+psycopg2
+psycopg2-binary
+pgvector
+requests
+torchreid
+pillow
