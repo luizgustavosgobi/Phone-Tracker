@@ -1,0 +1,7 @@
+eval/datasets/*
+eval/runs
+eval/plots
+models
+
+.env
+.idea

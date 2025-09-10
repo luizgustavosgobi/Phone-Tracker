@@ -15,7 +15,7 @@ from parsers.camera_parser import parseCameraConfigFile
 from services.api_services import saveOccurrence, OccurrencesType
 from utils.image_utils import encodeToJpg
 
-THRESHOLD = 0.65
+THRESHOLD = 0.75
 
 classNames = [
     "cellphone",
@@ -26,7 +26,7 @@ classNames = [
 def process_camera(camera_id, camera_url, camera_local):
     cap = cv.VideoCapture(camera_url)
 
-    model = YOLO("models/roboflowTrains/yolov11-Balanced.pt")
+    model = YOLO("models/yolov11n-Balanced.pt")
     extractor = FeatureExtractor(
         model_name='osnet_x1_0',
         model_path='models/model.pth.tar-50',

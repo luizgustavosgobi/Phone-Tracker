@@ -10,3 +10,7 @@ pgvector
 requests
 torchreid
 pillow
+pandas
+rfdetr
+matplotlib
+supervision
