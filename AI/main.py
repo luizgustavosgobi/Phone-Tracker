@@ -1,17 +1,19 @@
 import threading
+import time
 from datetime import datetime
 
 import cv2 as cv
 import cvzone
+import numpy as np
+import torch
 from rfdetr import RFDETRSmall
 import supervision as sv
+from torchvision.models import ResNet18_Weights
+from trackers import DeepSORTTracker, DeepSORTFeatureExtractor
 
-from ReId.feature_extractor import FeatureExtractor
-from ReId.trackers import ReIDModel, DeepSORTTracker
-from managers.Id_manager import assign_global_id, isNotified, isGlobalIdNotified, deleteExpiredIds, notify
+from managers.Id_manager import isNotified, deleteExpiredIds
 from parsers.camera_parser import parseCameraConfigFile
-from services.api_services import saveOccurrence, OccurrencesType
-from utils.image_utils import encodeToJpg
+from services.processing_queue import processingQueue
 
 THRESHOLD = 0.75
 SHOW_STUDENT_ID = True
@@ -22,40 +24,39 @@ classNames = [
     "using_cellphone"
 ]
 
-color = sv.ColorPalette.from_hex([
-    "#ffff00", "#ff9b00", "#ff8080", "#ff66b2", "#ff66ff", "#b266ff",
-    "#9999ff", "#3399ff", "#66ffff", "#33ff99", "#66ff66", "#99ff00"
-])
-
-box_annotator = sv.BoxAnnotator(
-    color=color,
-    color_lookup=sv.ColorLookup.TRACK)
-
-trace_annotator = sv.TraceAnnotator(
-    color=color,
-    color_lookup=sv.ColorLookup.TRACK,
-    thickness=2,
-    trace_length=100)
-
-label_annotator = sv.LabelAnnotator(
-    color=color,
-    color_lookup=sv.ColorLookup.TRACK,
-    text_color=sv.Color.BLACK,
-    text_scale=0.8)
-
-reid_model = ReIDModel.from_timm("resnetv2_50.a1h_in1k")
-tracker = DeepSORTTracker(reid_model=reid_model)
-
 def process_camera(camera_id, camera_url, camera_local):
-    cap = cv.VideoCapture(camera_url)
+    color = sv.ColorPalette.from_hex([
+        "#ffff00", "#ff9b00", "#ff8080", "#ff66b2", "#ff66ff", "#b266ff",
+        "#9999ff", "#3399ff", "#66ffff", "#33ff99", "#66ff66", "#99ff00"
+    ])
 
-    model = RFDETRSmall(pretrain_weights="models/rfdetr-s-finalDataset.pt", num_classes=3)
-    model.optimize_for_inference()
-    extractor = FeatureExtractor(
-        model_name='osnet_x1_0',
-        model_path='models/model.pth.tar-50',
-        device='cpu',
-    )
+    box_annotator = sv.BoxAnnotator(
+        color=color,
+        color_lookup=sv.ColorLookup.TRACK)
+
+    trace_annotator = sv.TraceAnnotator(
+        color=color,
+        color_lookup=sv.ColorLookup.TRACK,
+        thickness=2,
+        trace_length=100)
+
+    label_annotator = sv.LabelAnnotator(
+        color=color,
+        color_lookup=sv.ColorLookup.TRACK,
+        text_color=sv.Color.BLACK,
+        text_scale=0.8)
+
+    cap = cv.VideoCapture(camera_url)
+    cap_fps = cap.get(cv.CAP_PROP_FPS)
+
+    model = RFDETRSmall(pretrain_weights="models/rfdetr-s-1200.pt", num_classes=3)
+
+    feature_extractor = DeepSORTFeatureExtractor.from_timm(model_name="mobilenetv4_conv_small.e1200_r224_in1k")
+    tracker = DeepSORTTracker(feature_extractor=feature_extractor)
+
+    prev_time = time.perf_counter()
+    fps = 0.0
+    smoothing = 0.9
 
     while True:
         ret, frame = cap.read()
@@ -72,35 +73,33 @@ def process_camera(camera_id, camera_url, camera_local):
 
                 if not isNotified(camera_id, track_id) and name == "using_cellphone":
                     crop = frame[y1:y2, x1:x2]
+
                     if crop.size > 0:
-
-                        features = extractor.extract(crop)
-                        global_id, student_id = assign_global_id(camera_id, track_id, features)
-
-                        frame_copy = frame.copy()
-                        cvzone.cornerRect(frame_copy, (x1, y1, x2-x1, y2-y1))
-                        if SHOW_STUDENT_ID:
-                            cvzone.putTextRect(frame_copy, f"{student_id if student_id else global_id}", (x1, y1 - 20))
-
-                        if not isGlobalIdNotified(global_id):
-                            print(f"NOTIFIED - {global_id} {track_id}")
-                            notify(global_id)
-
-                            saveOccurrence(
-                                dateTime=datetime.now().isoformat(),
-                                local=camera_local,
-                                cameraId=camera_id,
-                                type=OccurrencesType.CELLPHONE,
-
-                                trackingId=global_id,
-                                predictedStudent=student_id,
-
-                                proofFile=("evidence.jpg", encodeToJpg(frame_copy), 'image/jpg')
-                            )
+                        processingQueue.enqueue({
+                            "camera_id": camera_id,
+                            "camera_local": camera_local,
+                            "track_id": track_id,
+                            "xyxy": xyxy,
+                            "frame": frame.copy(),
+                            "crop": crop,
+                            "show_student_id": SHOW_STUDENT_ID
+                        })
 
             box_annotator.annotate(frame, results)
             trace_annotator.annotate(frame, results)
             label_annotator.annotate(frame, results, results.tracker_id)
+
+        now = time.perf_counter()
+        dt = now - prev_time
+        if dt > 0:
+            inst_fps = 1.0 / dt
+            fps = (smoothing * fps) + ((1 - smoothing) * inst_fps) if fps > 0 else inst_fps
+        prev_time = now
+
+        fps_text = f"FPS: {fps:.1f}"
+        if cap_fps and cap_fps > 0:
+            fps_text += f" (cam: {int(cap_fps)})"
+        cv.putText(frame, fps_text, (10, 30), cv.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
 
         cv.imshow(f"Detection - Camera {camera_id}", frame)
         if cv.waitKey(1) & 0xFF == ord('q'):

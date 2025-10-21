@@ -17,7 +17,9 @@ class OccurrencesType(Enum):
 API_URL = getEnv("API_URL")
 API_KEY = getEnv("API_KEY")
 
-def saveOccurrence(dateTime: str, local: str, cameraId: int, type: OccurrencesType, proofFile, trackingId: int|None = None, predictedStudent: str|None = None) -> Response | None:
+SESSION = requests.Session()
+
+def saveOccurrence(dateTime: str, local: str, cameraId: int, type: OccurrencesType, proofFile, trackingId: int|None = None, predictedStudent: str|None = None, timeout: int = 5) -> Response:
     formData = {
         'date': (None, dateTime),
         'local': (None, local),
@@ -30,8 +32,10 @@ def saveOccurrence(dateTime: str, local: str, cameraId: int, type: OccurrencesTy
         'proof': proofFile
     }
 
+    url = f"{API_URL}/occurrences/create?api_key={API_KEY}"
     try:
-        response = requests.post(url=f"{API_URL}/occurrences/create?api_key={API_KEY}", files=formData)
+        response = SESSION.post(url=url, files=formData, timeout=timeout)
+        response.raise_for_status()
         return response
-    except Exception as e:
-        print(f"Error while trying to save the occurrence: {str(e)}")
+    except requests.exceptions.RequestException as e:
+        raise

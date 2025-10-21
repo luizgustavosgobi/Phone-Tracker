@@ -7,9 +7,11 @@ from scipy.spatial.distance import cosine
 
 from managers.database_manager import query_db, insert_db
 
-EXPIRATION_TIME = 5 # Seconds
-CLEANUP_INTERVAL = 10 # Seconds
+EXPIRATION_TIME = 20 # Seconds
+CLEANUP_INTERVAL = 30 # Seconds
 THRESHOLD = 0.7 # Float -> % Semelhança entre features
+
+id_map_lock = threading.Lock()
 
 global_track_ids_notified = set()
 id_map: dict[tuple[int, int], tuple[int, float]] = {} # (camera_id, track_id): (global_id, last_time)
@@ -22,9 +24,6 @@ def deleteExpiredIds():
             id_map.pop(id)
         time.sleep(CLEANUP_INTERVAL)
 
-def addId(camera_id: int, track_id: int, global_track_id:int) -> None:
-    id_map[(camera_id, track_id)] = (global_track_id, time.time())
-
 def isNotified(camera_id: int, track_id: int) -> bool:
     return (camera_id, track_id) in id_map
 
@@ -34,30 +33,41 @@ def isGlobalIdNotified(global_track_id: int) -> bool:
 def notify(global_track_id: int) -> None:
     global_track_ids_notified.add(global_track_id)
 
-def assign_global_id(camera_id: int, local_track_id: int, embedding: ndarray) -> (int, str):
+def assign_global_id(camera_id: int, local_track_id: int, embedding: ndarray) -> tuple[int, str|None]:
     key = (camera_id, local_track_id)
-    with threading.Lock():
-        if key in id_map:
-            return id_map[key][0]
+    with id_map_lock:
+        entry = id_map.get(key)
+        if entry:
+            global_id = entry[0]
+            id_map[key] = (global_id, time.time())
 
-        normalized_embedding = embedding / np.linalg.norm(embedding)
+    if entry:
+        result = query_db("SELECT student_id FROM tb_student_embeddings WHERE tracking_id = %s", (global_id,))
+        student_id = result[0][0] if result and len(result) > 0 else None
+        return global_id, student_id
 
-        result = query_db("SELECT student_id, tracking_id, 1 - (embedding <=> %s) AS similarity FROM tb_student_embeddings ORDER BY similarity DESC LIMIT 1",
-                          (normalized_embedding,))
+    #
+    # Caso Não ache no mapa de ‘ID’, buscar no banco
+    #
 
-        if result is not None and len(result) > 0:
-            student_id, tracking_id, similarity = result[0]
+    normalized_embedding = embedding / np.linalg.norm(embedding)
 
-            if similarity > THRESHOLD:
-                addId(camera_id, local_track_id, tracking_id)
-                return tracking_id, student_id
+    result = query_db("SELECT student_id, tracking_id, 1 - (embedding <=> %s) AS similarity FROM tb_student_embeddings ORDER BY similarity DESC LIMIT 1",
+                      (normalized_embedding,))
 
-        global global_id_counter
-        new_id = global_id_counter
-        global_id_counter += 1
+    if result is not None and len(result) > 0:
+        student_id, tracking_id, similarity = result[0]
 
-        insert_db("INSERT INTO tb_student_embeddings (tracking_id, embedding) VALUES (%s, %s)", (new_id, normalized_embedding))
+        if similarity > THRESHOLD:
+            id_map[key] = (tracking_id, time.time())
+            return tracking_id, student_id
 
-        addId(camera_id, local_track_id, new_id)
+    global global_id_counter
+    new_id = global_id_counter
+    global_id_counter += 1
 
-        return new_id, None
+    id_map[key] = (new_id, time.time())
+
+    insert_db("INSERT INTO tb_student_embeddings (tracking_id, embedding) VALUES (%s, %s)", (new_id, normalized_embedding))
+
+    return new_id, None

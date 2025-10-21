@@ -23,7 +23,7 @@ def query_db(query, params):
                 result = cur.fetchall()
                 return result
     except psycopg2.Error as e:
-        print(e)
+        return None
 
 def insert_db(query, params):
     try:
